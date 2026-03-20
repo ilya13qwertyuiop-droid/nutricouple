@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>FoodPlan для двоих</title>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --text: #000000;
+      --hint: #8e8e93;
+      --link: #2481cc;
+      --btn: #2481cc;
+      --btn-text: #ffffff;
+      --secondary-bg: #f2f2f7;
+      --card-radius: 14px;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: calc(64px + var(--safe-bottom));
+      font-size: 15px;
+    }
+    /* ── NAV ── */
+    .nav {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+      background: var(--bg);
+      border-top: 0.5px solid rgba(0,0,0,.12);
+      display: flex;
+      padding-bottom: var(--safe-bottom);
+    }
+    .nav-btn {
+      flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 6px 2px 8px;
+      border: none; background: none; cursor: pointer;
+      color: var(--hint); font-size: 10px; gap: 2px;
+      transition: color .2s;
+    }
+    .nav-btn.active { color: var(--btn); }
+    .nav-btn svg { width: 24px; height: 24px; }
+
+    /* ── SCREENS ── */
+    .screen { display: none; padding: 16px 16px 8px; }
+    .screen.active { display: block; }
+    .screen-title { font-size: 22px; font-weight: 700; margin-bottom: 16px; }
+
+    /* ── CARD ── */
+    .card {
+      background: var(--secondary-bg);
+      border-radius: var(--card-radius);
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .card-title {
+      font-size: 13px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .4px; color: var(--hint); margin-bottom: 10px;
+    }
+
+    /* ── INPUTS ── */
+    .form-row { display: flex; gap: 8px; }
+    .form-row .fgroup { flex: 1; }
+    .fgroup { margin-bottom: 10px; }
+    .flabel { font-size: 12px; color: var(--hint); margin-bottom: 4px; }
+    input, select, textarea {
+      width: 100%; padding: 10px 11px;
+      border: 1px solid rgba(0,0,0,.12); border-radius: 10px;
+      background: var(--bg); color: var(--text); font-size: 15px;
+      outline: none;
+    }
+    input:focus, select:focus { border-color: var(--btn); }
+
+    /* ── BUTTONS ── */
+    .btn {
+      display: block; width: 100%;
+      padding: 13px; border-radius: 12px; border: none;
+      font-size: 15px; font-weight: 600; cursor: pointer; text-align: center;
+      transition: opacity .15s;
+    }
+    .btn:active { opacity: .75; }
+    .btn-primary { background: var(--btn); color: var(--btn-text); }
+    .btn-secondary { background: var(--secondary-bg); color: var(--text); }
+    .btn-sm {
+      display: inline-block; width: auto; padding: 7px 14px;
+      border-radius: 8px; font-size: 13px; font-weight: 500;
+      cursor: pointer; border: none; transition: opacity .15s;
+    }
+    .btn-sm:active { opacity: .7; }
+    .btn-sm-primary { background: var(--btn); color: var(--btn-text); }
+    .btn-sm-secondary { background: rgba(0,0,0,.08); color: var(--text); }
+
+    /* ── CHIPS ── */
+    .chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .chip {
+      padding: 6px 14px; border-radius: 20px; font-size: 13px; cursor: pointer;
+      border: 1px solid rgba(0,0,0,.12); background: var(--bg); color: var(--text);
+      transition: background .15s;
+    }
+    .chip.on { background: var(--btn); color: var(--btn-text); border-color: var(--btn); }
+
+    /* ── PROFILE RESULT ── */
+    .bju-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 10px; }
+    .bju-box { background: var(--bg); border-radius: 10px; padding: 10px 6px; text-align: center; }
+    .bju-val { font-size: 20px; font-weight: 700; color: var(--btn); }
+    .bju-lbl { font-size: 10px; color: var(--hint); margin-top: 2px; }
+
+    /* ── PROGRESS BARS ── */
+    .bar-row { margin-bottom: 8px; }
+    .bar-labels { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; }
+    .bar-track { height: 7px; background: rgba(0,0,0,.08); border-radius: 4px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 4px; transition: width .4s; }
+    .bar-p { background: #34c759; }
+    .bar-f { background: #ff9500; }
+    .bar-c { background: #007aff; }
+
+    /* ── LIST ITEMS ── */
+    .list-item {
+      display: flex; align-items: center; padding: 10px 0;
+      border-bottom: .5px solid rgba(0,0,0,.07);
+    }
+    .list-item:last-child { border-bottom: none; }
+    .li-main { flex: 1; }
+    .li-title { font-size: 15px; }
+    .li-sub { font-size: 12px; color: var(--hint); margin-top: 2px; }
+    .li-right { font-size: 13px; color: var(--hint); margin-left: 8px; white-space: nowrap; }
+    .icon-btn {
+      width: 32px; height: 32px; border: none; background: none;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      font-size: 16px; color: var(--hint); border-radius: 50%;
+      transition: background .15s;
+    }
+    .icon-btn:active { background: rgba(0,0,0,.08); }
+
+    /* ── WEEK GRID ── */
+    .week-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 4px; margin-bottom: 14px; }
+    .day-btn {
+      padding: 7px 2px; border-radius: 8px; border: 1px solid rgba(0,0,0,.1);
+      background: var(--bg); font-size: 11px; text-align: center; cursor: pointer;
+      color: var(--text); line-height: 1.4; transition: background .15s;
+    }
+    .day-btn.on { background: var(--btn); color: #fff; border-color: var(--btn); }
+    .day-btn .today-dot { width: 4px; height: 4px; background: currentColor; border-radius: 50%; margin: 2px auto 0; }
+
+    /* ── SHOPPING ── */
+    .shop-item { display: flex; align-items: center; padding: 9px 0; border-bottom: .5px solid rgba(0,0,0,.07); }
+    .shop-item:last-child { border-bottom: none; }
+    .shop-cb { width: 20px; height: 20px; margin-right: 10px; cursor: pointer; flex-shrink: 0; accent-color: var(--btn); }
+    .shop-name { flex: 1; font-size: 15px; }
+    .shop-item.done .shop-name { text-decoration: line-through; color: var(--hint); }
+    .shop-price-input { width: 72px; padding: 5px 7px; font-size: 13px; border-radius: 7px; }
+    .total-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0 2px; font-weight: 600; border-top: .5px solid rgba(0,0,0,.1); margin-top: 6px; }
+
+    /* ── AI CARD ── */
+    .ai-card {
+      background: linear-gradient(135deg, #5856d6 0%, #af52de 100%);
+      color: #fff; border-radius: var(--card-radius); padding: 14px; margin-bottom: 10px;
+    }
+    .ai-card-title { font-size: 13px; font-weight: 600; opacity: .85; margin-bottom: 10px; }
+    .ai-dish {
+      background: rgba(255,255,255,.18); border-radius: 10px;
+      padding: 10px 12px; margin-bottom: 8px;
+    }
+    .ai-dish:last-child { margin-bottom: 0; }
+    .ai-dish-name { font-size: 15px; font-weight: 700; }
+    .ai-dish-desc { font-size: 12px; opacity: .85; margin-top: 3px; }
+    .ai-dish-bju { font-size: 11px; opacity: .75; margin-top: 4px; }
+    .ai-dish-add {
+      margin-top: 7px; padding: 4px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,.5);
+      background: rgba(255,255,255,.2); color: #fff; font-size: 12px; cursor: pointer;
+    }
+
+    /* ── PARTNER BADGE ── */
+    .partner-badge {
+      background: linear-gradient(135deg, #30d158 0%, #25a244 100%);
+      color: #fff; border-radius: var(--card-radius); padding: 14px; margin-bottom: 12px;
+    }
+    .partner-badge-label { font-size: 11px; opacity: .8; margin-bottom: 2px; }
+    .partner-badge-name { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+    .partner-badge-stats { font-size: 13px; opacity: .9; }
+
+    /* ── PAIR CODE ── */
+    .code-display {
+      font-size: 28px; font-weight: 800; letter-spacing: 5px; text-align: center;
+      color: var(--btn); padding: 10px; background: var(--bg); border-radius: 10px;
+      margin-bottom: 8px;
+    }
+
+    /* ── MODAL ── */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 300;
+      display: flex; align-items: flex-end;
+      opacity: 0; pointer-events: none; transition: opacity .25s;
+    }
+    .overlay.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: var(--bg); width: 100%;
+      border-radius: 18px 18px 0 0;
+      padding: 20px 16px calc(20px + var(--safe-bottom));
+      transform: translateY(100%); transition: transform .3s cubic-bezier(.4,0,.2,1);
+      max-height: 85vh; overflow-y: auto;
+    }
+    .overlay.open .modal { transform: translateY(0); }
+    .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; text-align: center; }
+    .modal-handle {
+      width: 36px; height: 4px; background: rgba(0,0,0,.18); border-radius: 2px;
+      margin: 0 auto 16px;
+    }
+
+    /* ── TOAST ── */
+    .toast {
+      position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+      background: rgba(30,30,30,.88); color: #fff;
+      padding: 9px 20px; border-radius: 20px; font-size: 14px; z-index: 500;
+      opacity: 0; transition: opacity .25s; white-space: nowrap;
+      backdrop-filter: blur(8px);
+    }
+    .toast.show { opacity: 1; }
+
+    /* ── SPINNER ── */
+    .spinner-row { display: flex; align-items: center; gap: 8px; color: var(--hint); font-size: 13px; padding: 14px 0; }
+    .spinner {
+      width: 18px; height: 18px; border: 2px solid rgba(0,0,0,.1);
+      border-top-color: var(--btn); border-radius: 50%;
+      animation: spin .7s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .empty-hint { color: var(--hint); font-size: 13px; text-align: center; padding: 18px 0; }
+
+    /* ── MEAL SLOT ── */
+    .slot-header { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--hint); margin: 12px 0 6px; }
+    .meal-item {
+      display: flex; align-items: center; background: var(--bg);
+      border-radius: 9px; padding: 8px 10px; margin-bottom: 4px;
+    }
+    .meal-item-name { flex: 1; font-size: 14px; }
+    .meal-item-kcal { font-size: 12px; color: var(--hint); margin-right: 6px; }
+
+    /* section divider */
+    .section-label {
+      font-size: 13px; font-weight: 600; color: var(--hint);
+      text-transform: uppercase; letter-spacing: .4px;
+      margin: 4px 0 8px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="toast" class="toast"></div>
+
+<!-- ═══════════════════════ SCREEN: PROFILE ═══════════════════════ -->
+<div id="s-profile" class="screen active">
+  <div class="screen-title">Профиль</div>
+
+  <div class="card">
+    <div class="card-title">Параметры тела</div>
+    <div class="form-row">
+      <div class="fgroup"><div class="flabel">Возраст</div><input type="number" id="p-age" placeholder="25" min="10" max="100"></div>
+      <div class="fgroup"><div class="flabel">Рост, см</div><input type="number" id="p-height" placeholder="170"></div>
+    </div>
+    <div class="form-row">
+      <div class="fgroup"><div class="flabel">Вес, кг</div><input type="number" id="p-weight" placeholder="65"></div>
+      <div class="fgroup">
+        <div class="flabel">Пол</div>
+        <select id="p-gender">
+          <option value="male">Мужской</option>
+          <option value="female">Женский</option>
+        </select>
+      </div>
+    </div>
+    <div class="fgroup">
+      <div class="flabel">Уровень активности</div>
+      <select id="p-activity">
+        <option value="1.2">Сидячий образ жизни</option>
+        <option value="1.375">Лёгкая активность (1–3 р/нед)</option>
+        <option value="1.55" selected>Умеренная (3–5 р/нед)</option>
+        <option value="1.725">Высокая (6–7 р/нед)</option>
+        <option value="1.9">Очень высокая (спортсмен)</option>
+      </select>
+    </div>
+    <div class="fgroup">
+      <div class="flabel">Цель</div>
+      <select id="p-goal">
+        <option value="lose">Похудение (−15% калорий)</option>
+        <option value="maintain" selected>Поддержание веса</option>
+        <option value="gain">Набор массы (+10% калорий)</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" onclick="calcProfile()">Рассчитать и сохранить</button>
+  </div>
+
+  <div class="card" id="profile-result" style="display:none">
+    <div class="card-title">Суточная норма (формула Миффлина–Сан Жеора)</div>
+    <div class="bju-grid">
+      <div class="bju-box"><div class="bju-val" id="r-kcal">—</div><div class="bju-lbl">ккал</div></div>
+      <div class="bju-box"><div class="bju-val" id="r-prot">—</div><div class="bju-lbl">белки г</div></div>
+      <div class="bju-box"><div class="bju-val" id="r-fat">—</div><div class="bju-lbl">жиры г</div></div>
+      <div class="bju-box"><div class="bju-val" id="r-carb">—</div><div class="bju-lbl">углев. г</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Связь с партнёром</div>
+    <div class="flabel" style="margin-bottom:4px">Ваш код — покажите партнёру:</div>
+    <div class="code-display" id="my-code">······</div>
+    <div style="font-size:12px;color:var(--hint);text-align:center;margin-bottom:12px">Партнёр вводит этот код у себя</div>
+    <div class="flabel">Код партнёра</div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <input type="text" id="partner-code-in" placeholder="ABCD12" style="text-transform:uppercase;flex:1">
+      <button class="btn-sm btn-sm-primary" onclick="linkPartner()">Связать</button>
+    </div>
+    <div id="partner-info" style="display:none">
+      <div style="font-size:13px;color:var(--hint)">Партнёр подключён:</div>
+      <div id="partner-display-name" style="font-size:16px;font-weight:600;margin-top:2px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ SCREEN: FRIDGE ═══════════════════════ -->
+<div id="s-fridge" class="screen">
+  <div class="screen-title">Холодильник</div>
+
+  <button class="btn btn-secondary" style="margin-bottom:12px" onclick="openProductModal()">+ Добавить продукт</button>
+
+  <div class="card">
+    <div class="card-title">Общие продукты</div>
+    <div id="products-list"><div class="spinner-row"><div class="spinner"></div>Загрузка…</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">AI подбор блюд (Gemini)</div>
+    <div class="flabel" style="margin-bottom:6px">Приём пищи:</div>
+    <div class="chip-row" id="meal-chips">
+      <button class="chip on" data-m="breakfast" onclick="pickMealChip(this)">Завтрак</button>
+      <button class="chip" data-m="lunch" onclick="pickMealChip(this)">Обед</button>
+      <button class="chip" data-m="dinner" onclick="pickMealChip(this)">Ужин</button>
+      <button class="chip" data-m="snack" onclick="pickMealChip(this)">Перекус</button>
+    </div>
+    <div class="fgroup">
+      <div class="flabel">Пожелания (необязательно)</div>
+      <input type="text" id="ai-wishes" placeholder="Без глютена, быстро, вегетарианское…">
+    </div>
+    <button class="btn btn-primary" style="margin-bottom:12px" onclick="askGemini()">✨ Подобрать блюда</button>
+    <div id="ai-result"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ SCREEN: MENU ═══════════════════════ -->
+<div id="s-menu" class="screen">
+  <div class="screen-title">Меню на неделю</div>
+  <div class="week-grid" id="week-grid"></div>
+  <div id="day-slots"></div>
+</div>
+
+<!-- ═══════════════════════ SCREEN: SHOPPING ═══════════════════════ -->
+<div id="s-shopping" class="screen">
+  <div class="screen-title">Список покупок</div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="card-title" style="margin:0">Из меню недели</div>
+      <button class="btn-sm btn-sm-secondary" onclick="buildShopList()">Обновить</button>
+    </div>
+    <div id="shop-list"></div>
+    <div class="total-row">
+      <span>Итого (не куплено):</span>
+      <span id="shop-total" style="color:var(--btn)">0,00 BYN</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Добавить вручную</div>
+    <div style="display:flex;gap:8px">
+      <input type="text" id="sh-name" placeholder="Название" style="flex:2">
+      <input type="number" id="sh-price" placeholder="BYN" step="0.01" style="flex:1">
+      <button class="btn-sm btn-sm-primary" onclick="addManualShop()">+</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ SCREEN: TRACKER ═══════════════════════ -->
+<div id="s-tracker" class="screen">
+  <div class="screen-title">Трекер питания</div>
+
+  <div id="partner-badge" class="partner-badge" style="display:none">
+    <div class="partner-badge-label">Партнёр сегодня:</div>
+    <div class="partner-badge-name" id="pb-name">—</div>
+    <div class="partner-badge-stats" id="pb-stats"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Мой прогресс за сегодня</div>
+    <div class="bju-grid">
+      <div class="bju-box"><div class="bju-val" id="t-kcal">0</div><div class="bju-lbl">ккал</div></div>
+      <div class="bju-box"><div class="bju-val" id="t-prot">0</div><div class="bju-lbl">белки г</div></div>
+      <div class="bju-box"><div class="bju-val" id="t-fat">0</div><div class="bju-lbl">жиры г</div></div>
+      <div class="bju-box"><div class="bju-val" id="t-carb">0</div><div class="bju-lbl">углев. г</div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-labels"><span>Белки</span><span id="lbl-prot">0 / — г</span></div>
+      <div class="bar-track"><div class="bar-fill bar-p" id="bar-prot" style="width:0"></div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-labels"><span>Жиры</span><span id="lbl-fat">0 / — г</span></div>
+      <div class="bar-track"><div class="bar-fill bar-f" id="bar-fat" style="width:0"></div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-labels"><span>Углеводы</span><span id="lbl-carb">0 / — г</span></div>
+      <div class="bar-track"><div class="bar-fill bar-c" id="bar-carb" style="width:0"></div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Дневник питания</div>
+    <button class="btn btn-secondary" style="margin-bottom:10px" onclick="openDiaryModal()">+ Записать приём пищи</button>
+    <div id="diary-list"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ BOTTOM NAV ═══════════════════════ -->
+<nav class="nav">
+  <button class="nav-btn active" id="nb-profile" onclick="goTo('profile',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+    Профиль
+  </button>
+  <button class="nav-btn" id="nb-fridge" onclick="goTo('fridge',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="9" y1="2" x2="9" y2="10"/></svg>
+    Холодильник
+  </button>
+  <button class="nav-btn" id="nb-menu" onclick="goTo('menu',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    Меню
+  </button>
+  <button class="nav-btn" id="nb-shopping" onclick="goTo('shopping',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+    Покупки
+  </button>
+  <button class="nav-btn" id="nb-tracker" onclick="goTo('tracker',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    Трекер
+  </button>
+</nav>
+
+<!-- ═══════════════════════ MODAL ═══════════════════════ -->
+<div class="overlay" id="overlay" onclick="maybeCloseOverlay(event)">
+  <div class="modal" id="modal-body">
+    <div class="modal-handle"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     JAVASCRIPT
+     ═══════════════════════════════════════════════════════ -->
+<script>
+// ─────────────────────────────────────────
+// ⚙️  CONFIG — ЗАМЕНИТЕ НА СВОИ ЗНАЧЕНИЯ
+// ─────────────────────────────────────────
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyC5LX7Soi7xOk-1AxEJI-OqeEpnFyurcEQ",
+  authDomain:        "edaa-ae768.firebaseapp.com",
+  projectId:         "edaa-ae768",
+  storageBucket:     "edaa-ae768.firebasestorage.app",
+  messagingSenderId: "1005520410294",
+  appId:             "1:1005520410294:web:2c879bb6536d738727b817"
+};
+const GEMINI_KEY = "AIzaSyDeCPwYFEj2v_92As7itJkUwrGHvsBvjJM";
+// ─────────────────────────────────────────
+
+// ── Firebase init ──
+firebase.initializeApp(FIREBASE_CONFIG);
+const db = firebase.firestore();
+
+// ── Telegram WebApp ──
+const tg = window.Telegram?.WebApp;
+if (tg) { tg.ready(); tg.expand(); applyTgTheme(); }
+
+// ── Identity ──
+const tgUser = tg?.initDataUnsafe?.user;
+const userId   = tgUser?.id?.toString() || (localStorage.getItem('uid') || uid8());
+const userName = tgUser?.first_name || localStorage.getItem('uname') || 'Я';
+localStorage.setItem('uid', userId);
+localStorage.setItem('uname', userName);
+const myCode   = userId.slice(-6).toUpperCase();
+
+// ── State ──
+let profile     = JSON.parse(localStorage.getItem('profile') || '{}');
+let partnerId   = localStorage.getItem('partnerId') || null;
+let partnerName = localStorage.getItem('partnerName') || '';
+let products    = [];
+let weekMenu    = {};         // { "2025-03-17": { breakfast:[…], lunch:[…], … } }
+let diary       = [];
+let shopExtra   = JSON.parse(localStorage.getItem('shopExtra') || '[]');
+let shopChecked = JSON.parse(localStorage.getItem('shopChecked') || '{}');
+let shopPrices  = JSON.parse(localStorage.getItem('shopPrices') || '{}');
+let selDay      = new Date().getDay();
+let aiMeal      = 'breakfast';
+const todayKey  = toDateKey(new Date());
+
+const DAYS_S    = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+const MEAL_RU   = { breakfast:'Завтрак', lunch:'Обед', dinner:'Ужин', snack:'Перекус' };
+const MEAL_KEYS = ['breakfast','lunch','dinner','snack'];
+
+// ═══════════════════════════════════════
+// THEME
+// ═══════════════════════════════════════
+function applyTgTheme() {
+  const t = tg.themeParams || {};
+  const r = document.documentElement;
+  const set = (v, p) => { if (v) r.style.setProperty(p, v); };
+  set(t.bg_color,           '--bg');
+  set(t.text_color,         '--text');
+  set(t.hint_color,         '--hint');
+  set(t.link_color,         '--link');
+  set(t.button_color,       '--btn');
+  set(t.button_text_color,  '--btn-text');
+  set(t.secondary_bg_color, '--secondary-bg');
+}
+
+// ═══════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════
+function goTo(name, btn) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('s-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'fridge')   loadProducts();
+  if (name === 'menu')     renderWeekGrid();
+  if (name === 'shopping') buildShopList();
+  if (name === 'tracker')  renderTracker();
+}
+
+// ═══════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════
+function uid8() { return Math.random().toString(36).slice(2,10).toUpperCase(); }
+function toDateKey(d) { return d.toISOString().split('T')[0]; }
+function dayKey(idx) {
+  const d = new Date();
+  d.setDate(d.getDate() + (idx - d.getDay()));
+  return toDateKey(d);
+}
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function toast(msg, ms=2600) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), ms);
+}
+function pairId() {
+  if (!partnerId) return null;
+  return [userId, partnerId].sort().join('_');
+}
+
+// ── Modal ──
+function showModal(html) {
+  document.getElementById('modal-body').innerHTML = '<div class="modal-handle"></div>' + html;
+  document.getElementById('overlay').classList.add('open');
+}
+function closeOverlay() { document.getElementById('overlay').classList.remove('open'); }
+function maybeCloseOverlay(e) { if (e.target.id === 'overlay') closeOverlay(); }
+
+// ═══════════════════════════════════════
+// PROFILE
+// ═══════════════════════════════════════
+function mifflin(w, h, a, g) {
+  return g === 'male' ? 10*w + 6.25*h - 5*a + 5 : 10*w + 6.25*h - 5*a - 161;
+}
+
+function calcProfile() {
+  const age    = +document.getElementById('p-age').value;
+  const height = +document.getElementById('p-height').value;
+  const weight = +document.getElementById('p-weight').value;
+  const gender = document.getElementById('p-gender').value;
+  const act    = +document.getElementById('p-activity').value;
+  const goal   = document.getElementById('p-goal').value;
+
+  if (!age || !height || !weight) { toast('Заполните все поля'); return; }
+
+  let tdee = Math.round(mifflin(weight, height, age, gender) * act);
+  if (goal === 'lose') tdee = Math.round(tdee * 0.85);
+  if (goal === 'gain') tdee = Math.round(tdee * 1.10);
+
+  const prot = Math.round(weight * 1.8);
+  const fat  = Math.round(tdee * 0.25 / 9);
+  const carb = Math.round((tdee - prot*4 - fat*9) / 4);
+
+  profile = { age, height, weight, gender, act, goal, tdee, prot, fat, carb };
+  localStorage.setItem('profile', JSON.stringify(profile));
+
+  document.getElementById('r-kcal').textContent = tdee;
+  document.getElementById('r-prot').textContent = prot;
+  document.getElementById('r-fat').textContent  = fat;
+  document.getElementById('r-carb').textContent = carb;
+  document.getElementById('profile-result').style.display = 'block';
+
+  saveUserDoc();
+  toast('Профиль сохранён!');
+}
+
+function saveUserDoc() {
+  db.collection('users').doc(userId).set({
+    name: userName, code: myCode, profile,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true }).catch(() => {});
+}
+
+async function linkPartner() {
+  const code = document.getElementById('partner-code-in').value.trim().toUpperCase();
+  if (!code || code === myCode) { toast('Введите чужой код'); return; }
+  try {
+    const snap = await db.collection('users').where('code','==',code).get();
+    if (snap.empty) { toast('Пользователь не найден'); return; }
+    const doc = snap.docs[0];
+    partnerId   = doc.id;
+    partnerName = doc.data().name || 'Партнёр';
+    localStorage.setItem('partnerId',   partnerId);
+    localStorage.setItem('partnerName', partnerName);
+    // save cross-link
+    await db.collection('users').doc(userId).set(
+      { partnerId, partnerCode: code }, { merge: true });
+    await db.collection('users').doc(partnerId).set(
+      { partnerId: userId, partnerCode: myCode }, { merge: true });
+    showPartnerInfo();
+    toast('Партнёр подключён!');
+  } catch(e) { toast('Ошибка: ' + e.message); }
+}
+
+function showPartnerInfo() {
+  document.getElementById('partner-info').style.display = 'block';
+  document.getElementById('partner-display-name').textContent = partnerName;
+}
+
+function loadProfile() {
+  document.getElementById('my-code').textContent = myCode;
+  if (profile.tdee) {
+    const f = document.getElementById;
+    f('p-age').value    = profile.age    || '';
+    f('p-height').value = profile.height || '';
+    f('p-weight').value = profile.weight || '';
+    f('p-gender').value = profile.gender || 'male';
+    f('p-activity').value = profile.act  || '1.55';
+    f('p-goal').value   = profile.goal   || 'maintain';
+    f('r-kcal').textContent = profile.tdee;
+    f('r-prot').textContent = profile.prot;
+    f('r-fat').textContent  = profile.fat;
+    f('r-carb').textContent = profile.carb;
+    document.getElementById('profile-result').style.display = 'block';
+  }
+  if (partnerId) showPartnerInfo();
+
+  // Sync from Firestore
+  db.collection('users').doc(userId).get().then(doc => {
+    if (!doc.exists) { saveUserDoc(); return; }
+    const d = doc.data();
+    if (d.partnerId && !partnerId) {
+      partnerId   = d.partnerId;
+      partnerName = d.partnerName || 'Партнёр';
+      localStorage.setItem('partnerId',   partnerId);
+      localStorage.setItem('partnerName', partnerName);
+      // fetch partner name
+      db.collection('users').doc(partnerId).get().then(pd => {
+        if (pd.exists) {
+          partnerName = pd.data().name || 'Партнёр';
+          localStorage.setItem('partnerName', partnerName);
+          showPartnerInfo();
+        }
+      });
+    }
+  }).catch(() => {});
+}
+
+// ═══════════════════════════════════════
+// FRIDGE
+// ═══════════════════════════════════════
+function fridgeDoc() {
+  const id = pairId() || userId;
+  return db.collection('fridges').doc(id);
+}
+
+let productsUnsub = null;
+function loadProducts() {
+  if (productsUnsub) productsUnsub();
+  document.getElementById('products-list').innerHTML = '<div class="spinner-row"><div class="spinner"></div>Загрузка…</div>';
+  productsUnsub = fridgeDoc().collection('products')
+    .orderBy('ts','desc')
+    .onSnapshot(snap => {
+      products = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderProducts();
+    }, () => {
+      products = JSON.parse(localStorage.getItem('products') || '[]');
+      renderProducts();
+    });
+}
+
+function renderProducts() {
+  const el = document.getElementById('products-list');
+  if (!products.length) { el.innerHTML = '<div class="empty-hint">Холодильник пуст — добавьте продукты</div>'; return; }
+  el.innerHTML = products.map(p => `
+    <div class="list-item">
+      <div class="li-main">
+        <div class="li-title">${esc(p.name)}</div>
+        ${p.amount ? `<div class="li-sub">${esc(p.amount)} ${esc(p.unit||'')}</div>` : ''}
+      </div>
+      <button class="icon-btn" onclick="delProduct('${esc(p.id)}')">🗑</button>
+    </div>`).join('');
+}
+
+function openProductModal() {
+  showModal(`
+    <div class="modal-title">Добавить продукт</div>
+    <div class="fgroup"><div class="flabel">Название</div><input id="np-name" type="text" placeholder="Куриная грудка"></div>
+    <div class="form-row">
+      <div class="fgroup"><div class="flabel">Кол-во</div><input id="np-amt" type="number" placeholder="500"></div>
+      <div class="fgroup"><div class="flabel">Единица</div>
+        <select id="np-unit"><option>г</option><option>кг</option><option>мл</option><option>л</option><option>шт</option><option>уп</option></select>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="addProduct()">Добавить</button>
+  `);
+  setTimeout(() => document.getElementById('np-name')?.focus(), 300);
+}
+
+async function addProduct() {
+  const name = document.getElementById('np-name').value.trim();
+  if (!name) { toast('Введите название'); return; }
+  const item = {
+    name,
+    amount: document.getElementById('np-amt').value || '',
+    unit:   document.getElementById('np-unit').value,
+    by: userId,
+    ts: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  try { await fridgeDoc().collection('products').add(item); }
+  catch { products.unshift({ ...item, id: Date.now()+'', ts: new Date() }); localStorage.setItem('products', JSON.stringify(products)); renderProducts(); }
+  closeOverlay(); toast('Добавлено!');
+}
+
+async function delProduct(id) {
+  try { await fridgeDoc().collection('products').doc(id).delete(); }
+  catch { products = products.filter(p => p.id !== id); localStorage.setItem('products', JSON.stringify(products)); renderProducts(); }
+}
+
+// ═══════════════════════════════════════
+// GEMINI AI
+// ═══════════════════════════════════════
+function pickMealChip(btn) {
+  document.querySelectorAll('#meal-chips .chip').forEach(c => c.classList.remove('on'));
+  btn.classList.add('on');
+  aiMeal = btn.dataset.m;
+}
+
+async function askGemini() {
+  if (!GEMINI_KEY || GEMINI_KEY === 'YOUR_GEMINI_API_KEY') {
+    toast('Gemini API ключ не настроен'); return;
+  }
+  const resEl  = document.getElementById('ai-result');
+  const wishes = document.getElementById('ai-wishes').value.trim();
+  const prods  = products.map(p => `${p.name}${p.amount ? ' ' + p.amount + p.unit : ''}`).join(', ') || 'базовые продукты';
+  const mName  = MEAL_RU[aiMeal];
+
+  const prompt = `Ты диетолог. Предложи ровно 3 блюда для «${mName}» из продуктов: ${prods}.
+${wishes ? 'Пожелания: ' + wishes + '.' : ''}
+${profile.tdee ? `Норма пользователя: ${profile.tdee} ккал, Б${profile.prot}г Ж${profile.fat}г У${profile.carb}г.` : ''}
+Ответь ТОЛЬКО JSON-массивом (без markdown):
+[{"name":"…","desc":"…","kcal":0,"protein":0,"fat":0,"carb":0}]`;
+
+  resEl.innerHTML = '<div class="spinner-row"><div class="spinner"></div>Gemini подбирает…</div>';
+
+  try {
+    const r = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:.7,maxOutputTokens:1024} }) }
+    );
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data  = await r.json();
+    const text  = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const match = text.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error('Нет JSON в ответе');
+    const dishes = JSON.parse(match[0]);
+
+    resEl.innerHTML = `<div class="ai-card">
+      <div class="ai-card-title">Рекомендации для «${mName}»:</div>
+      ${dishes.map((d,i) => `
+        <div class="ai-dish">
+          <div class="ai-dish-name">${esc(d.name)}</div>
+          <div class="ai-dish-desc">${esc(d.desc)}</div>
+          <div class="ai-dish-bju">${d.kcal} ккал · Б:${d.protein}г · Ж:${d.fat}г · У:${d.carb}г</div>
+          <button class="ai-dish-add" onclick='addAiDish(${JSON.stringify(d)})'>+ В меню на сегодня</button>
+        </div>`).join('')}
+    </div>`;
+  } catch(e) {
+    resEl.innerHTML = `<div style="color:#ff3b30;font-size:13px;padding:8px">Ошибка: ${esc(e.message)}</div>`;
+  }
+}
+
+function addAiDish(d) {
+  addToSlot(aiMeal, d.name, d.kcal, d.protein, d.fat, d.carb);
+  toast(`«${d.name}» добавлено в меню`);
+}
+
+// ═══════════════════════════════════════
+// MENU
+// ═══════════════════════════════════════
+function menuDoc() {
+  return db.collection('menus').doc(pairId() || userId);
+}
+
+let menuUnsub = null;
+function loadMenu() {
+  if (menuUnsub) menuUnsub();
+  menuUnsub = menuDoc().onSnapshot(doc => {
+    weekMenu = doc.exists ? doc.data() : {};
+    if (document.getElementById('s-menu').classList.contains('active')) renderDaySlots();
+  }, () => {
+    weekMenu = JSON.parse(localStorage.getItem('weekMenu') || '{}');
+    renderDaySlots();
+  });
+}
+
+function renderWeekGrid() {
+  const today = new Date().getDay();
+  document.getElementById('week-grid').innerHTML = DAYS_S.map((d,i) => `
+    <button class="day-btn ${i===selDay?'on':''}" onclick="pickDay(${i},this)">
+      ${d}${i===today ? '<div class="today-dot"></div>' : ''}
+    </button>`).join('');
+  renderDaySlots();
+}
+
+function pickDay(idx, btn) {
+  selDay = idx;
+  document.querySelectorAll('.day-btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  renderDaySlots();
+}
+
+function renderDaySlots() {
+  const dk   = dayKey(selDay);
+  const day  = weekMenu[dk] || {};
+  const el   = document.getElementById('day-slots');
+  el.innerHTML = MEAL_KEYS.map(slot => {
+    const items = day[slot] || [];
+    const personal = slot === 'snack';
+    return `
+      <div class="card">
+        <div class="card-title">${MEAL_RU[slot]}${personal ? ' (личный)' : ''}</div>
+        <div id="slot-${slot}">
+          ${items.length ? items.map((it,i) => `
+            <div class="meal-item">
+              <span class="meal-item-name">${esc(it.name)}</span>
+              <span class="meal-item-kcal">${it.kcal||0} ккал</span>
+              <button class="icon-btn" onclick="removeFromSlot('${slot}',${i})">✕</button>
+            </div>`).join('') : ''}
+        </div>
+        <button class="btn-sm btn-sm-secondary" style="margin-top:6px" onclick="openAddMealModal('${slot}')">+ Добавить</button>
+      </div>`;
+  }).join('');
+}
+
+function openAddMealModal(slot) {
+  showModal(`
+    <div class="modal-title">Добавить в «${MEAL_RU[slot]}»</div>
+    <div class="fgroup"><div class="flabel">Блюдо</div><input id="am-name" type="text" placeholder="Гречка с курицей"></div>
+    <div class="form-row">
+      <div class="fgroup"><div class="flabel">ккал</div><input id="am-kcal" type="number" placeholder="350"></div>
+      <div class="fgroup"><div class="flabel">Белки г</div><input id="am-prot" type="number" placeholder="25"></div>
+    </div>
+    <div class="form-row">
+      <div class="fgroup"><div class="flabel">Жиры г</div><input id="am-fat" type="number" placeholder="8"></div>
+      <div class="fgroup"><div class="flabel">Углев. г</div><input id="am-carb" type="number" placeholder="45"></div>
+    </div>
+    <button class="btn btn-primary" onclick="saveMealModal('${slot}')">Добавить</button>
+  `);
+  setTimeout(() => document.getElementById('am-name')?.focus(), 300);
+}
+
+function saveMealModal(slot) {
+  const name = document.getElementById('am-name').value.trim();
+  if (!name) { toast('Введите название'); return; }
+  addToSlot(slot, name,
+    +document.getElementById('am-kcal').value||0,
+    +document.getElementById('am-prot').value||0,
+    +document.getElementById('am-fat').value||0,
+    +document.getElementById('am-carb').value||0);
+  closeOverlay();
+}
+
+async function addToSlot(slot, name, kcal, prot, fat, carb) {
+  const dk = dayKey(selDay);
+  if (!weekMenu[dk]) weekMenu[dk] = {};
+  if (!weekMenu[dk][slot]) weekMenu[dk][slot] = [];
+  weekMenu[dk][slot].push({ name, kcal, prot, fat, carb });
+  await saveMenu();
+  renderDaySlots();
+}
+
+async function removeFromSlot(slot, idx) {
+  const dk = dayKey(selDay);
+  weekMenu[dk]?.[slot]?.splice(idx, 1);
+  await saveMenu();
+  renderDaySlots();
+}
+
+async function saveMenu() {
+  try { await menuDoc().set(weekMenu); }
+  catch { localStorage.setItem('weekMenu', JSON.stringify(weekMenu)); }
+}
+
+// ═══════════════════════════════════════
+// SHOPPING
+// ═══════════════════════════════════════
+function buildShopList() {
+  const agg = {};
+  Object.values(weekMenu).forEach(day => {
+    MEAL_KEYS.forEach(slot => {
+      (day[slot]||[]).forEach(it => {
+        const k = it.name.toLowerCase();
+        if (!agg[k]) agg[k] = { name: it.name, qty: 1 };
+        else agg[k].qty++;
+      });
+    });
+  });
+
+  const fromMenu = Object.values(agg).map(it => ({
+    name: it.name,
+    qty:  it.qty,
+    price: shopPrices[it.name.toLowerCase()] || '',
+    manual: false
+  }));
+
+  const combined = [...fromMenu, ...shopExtra];
+  renderShop(combined);
+}
+
+function renderShop(list) {
+  const el = document.getElementById('shop-list');
+  if (!list.length) { el.innerHTML = '<div class="empty-hint">Список пуст — добавьте блюда в меню</div>'; recalcTotal(list); return; }
+  el.innerHTML = list.map((it, i) => {
+    const done = !!shopChecked[it.name];
+    return `
+      <div class="shop-item ${done?'done':''}" id="si-${i}">
+        <input class="shop-cb" type="checkbox" ${done?'checked':''} onchange="toggleShop('${esc(it.name)}',${i},this.checked)">
+        <span class="shop-name">${esc(it.name)}${it.qty>1?' ×'+it.qty:''}</span>
+        <input class="shop-price-input" type="number" step="0.01" min="0" value="${esc(it.price||'')}"
+               placeholder="BYN" onchange="setPrice('${esc(it.name)}',this.value,${i})">
+      </div>`;
+  }).join('');
+  recalcTotal(list);
+  // keep list ref for total recalc
+  window._shopList = list;
+}
+
+function toggleShop(name, idx, val) {
+  shopChecked[name] = val;
+  localStorage.setItem('shopChecked', JSON.stringify(shopChecked));
+  document.getElementById('si-'+idx)?.classList.toggle('done', val);
+  recalcTotal(window._shopList || []);
+}
+
+function setPrice(name, val, idx) {
+  shopPrices[name.toLowerCase()] = val;
+  localStorage.setItem('shopPrices', JSON.stringify(shopPrices));
+  if (window._shopList?.[idx]) window._shopList[idx].price = val;
+  recalcTotal(window._shopList || []);
+}
+
+function recalcTotal(list) {
+  let sum = 0;
+  list.forEach(it => { if (!shopChecked[it.name] && it.price) sum += parseFloat(it.price)||0; });
+  document.getElementById('shop-total').textContent = sum.toFixed(2).replace('.',',') + ' BYN';
+}
+
+function addManualShop() {
+  const name  = document.getElementById('sh-name').value.trim();
+  const price = document.getElementById('sh-price').value;
+  if (!name) { toast('Введите название'); return; }
+  shopExtra.push({ name, qty:1, price: price||'', manual:true });
+  localStorage.setItem('shopExtra', JSON.stringify(shopExtra));
+  document.getElementById('sh-name').value  = '';
+  document.getElementById('sh-price').value = '';
+  buildShopList();
+}
+
+// ═══════════════════════════════════════
+// TRACKER
+// ═══════════════════════════════════════
+function renderTracker() {
+  loadDiary();
+  loadPartnerBadge();
+}
+
+function loadDiary() {
+  db.collection('diary').doc(userId).collection('entries')
+    .where('date','==',todayKey)
+    .orderBy('ts','asc')
+    .get()
+    .then(snap => {
+      diary = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      renderDiaryUI();
+    })
+    .catch(() => {
+      diary = JSON.parse(localStorage.getItem('diary_'+todayKey) || '[]');
+      renderDiaryUI();
+    });
+}
+
+function renderDiaryUI() {
+  let kcal=0, prot=0, fat=0, carb=0;
+  diary.forEach(e => { kcal+=e.kcal||0; prot+=e.prot||0; fat+=e.fat||0; carb+=e.carb||0; });
+
+  document.getElementById('t-kcal').textContent = kcal;
+  document.getElementById('t-prot').textContent = prot;
+  document.getElementById('t-fat').textContent  = fat;
+  document.getElementById('t-carb').textContent = carb;
+
+  if (profile.tdee) {
+    setBar('bar-prot','lbl-prot', prot, profile.prot, 'г');
+    setBar('bar-fat', 'lbl-fat',  fat,  profile.fat,  'г');
+    setBar('bar-carb','lbl-carb', carb, profile.carb, 'г');
+  }
+
+  const el = document.getElementById('diary-list');
+  if (!diary.length) { el.innerHTML = '<div class="empty-hint">Дневник пуст — записывайте приёмы пищи</div>'; return; }
+  el.innerHTML = diary.map((e,i) => `
+    <div class="list-item">
+      <div class="li-main">
+        <div class="li-title">${esc(e.name)}</div>
+        <div class="li-sub">${MEAL_RU[e.meal]||e.meal} · Б${e.prot}г Ж${e.fat}г У${e.carb}г</div>
+      </div>
+      <div class="li-right">${e.kcal} ккал</div>
+      <button class="icon-btn" onclick="delDiary('${esc(e.id)}',${i})">✕</button>
+    </div>`).join('');
+
+  // push today stats for partner badge
+  db.collection('users').doc(userId).set(
+    { todayStats: { kcal, prot, fat, carb, date: todayKey }, name: userName },
+    { merge:true }).catch(()=>{});
+}
+
+function setBar(fillId, lblId, cur, max, unit) {
+  const pct = max ? Math.min(100, Math.round(cur/max*100)) : 0;
+  document.getElementById(fillId).style.width = pct + '%';
+  document.getElementById(lblId).textContent  = `${cur} / ${max||'—'} ${unit}`;
+}
+
+function loadPartnerBadge() {
+  if (!partnerId) return;
+  db.collection('users').doc(partnerId).get().then(doc => {
+    if (!doc.exists) return;
+    const d = doc.data();
+    if (d.todayStats?.date === todayKey) {
+      const s = d.todayStats;
+      document.getElementById('partner-badge').style.display = 'block';
+      document.getElementById('pb-name').textContent  = d.name || 'Партнёр';
+      document.getElementById('pb-stats').textContent =
+        `${s.kcal} ккал · Б${s.prot}г · Ж${s.fat}г · У${s.carb}г`;
+    }
+  }).catch(()=>{});
+}
+
+function openDiaryModal() {
+  showModal(`
+    <div class="modal-title">Записать приём пищи</div>
+    <div class="fgroup"><div class="flabel">Что съели?</div><input id="de-name" type="text" placeholder="Овсянка с бананом"></div>
+    <div class="fgroup"><div class="flabel">Приём пищи</div>
+      <select id="de-meal">
+        <option value="breakfast">Завтрак</option>
+        <option value="lunch">Обед</option>
+        <option value="dinner">Ужин</option>
+        <option value="snack">Перекус</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="fgroup"><div class="flabel">ккал</div><input id="de-kcal" type="number" placeholder="350"></div>
+      <div class="fgroup"><div class="flabel">Белки г</div><input id="de-prot" type="number" placeholder="20"></div>
+    </div>
+    <div class="form-row">
+      <div class="fgroup"><div class="flabel">Жиры г</div><input id="de-fat" type="number" placeholder="10"></div>
+      <div class="fgroup"><div class="flabel">Углев. г</div><input id="de-carb" type="number" placeholder="45"></div>
+    </div>
+    <button class="btn btn-primary" onclick="saveDiary()">Записать</button>
+  `);
+  setTimeout(() => document.getElementById('de-name')?.focus(), 300);
+}
+
+async function saveDiary() {
+  const name = document.getElementById('de-name').value.trim();
+  if (!name) { toast('Введите название'); return; }
+  const entry = {
+    name, date: todayKey,
+    meal: document.getElementById('de-meal').value,
+    kcal: +document.getElementById('de-kcal').value||0,
+    prot: +document.getElementById('de-prot').value||0,
+    fat:  +document.getElementById('de-fat').value||0,
+    carb: +document.getElementById('de-carb').value||0,
+    ts: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  try {
+    const ref = await db.collection('diary').doc(userId).collection('entries').add(entry);
+    diary.push({ ...entry, id: ref.id });
+  } catch {
+    entry.id = Date.now()+'';
+    diary.push(entry);
+    localStorage.setItem('diary_'+todayKey, JSON.stringify(diary));
+  }
+  closeOverlay();
+  renderDiaryUI();
+  toast('Записано!');
+}
+
+async function delDiary(id, idx) {
+  try { await db.collection('diary').doc(userId).collection('entries').doc(id).delete(); } catch {}
+  diary.splice(idx, 1);
+  localStorage.setItem('diary_'+todayKey, JSON.stringify(diary));
+  renderDiaryUI();
+}
+
+// ═══════════════════════════════════════
+// STARTUP
+// ═══════════════════════════════════════
+(function init() {
+  loadProfile();
+  loadMenu();
+})();
+</script>
+</body>
+</html>
